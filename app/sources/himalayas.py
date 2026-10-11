@@ -4,35 +4,31 @@ from datetime import datetime, timezone
 
 from app.models.job import Job
 
-
 HIMALAYAS_URL = "https://himalayas.app/jobs/api/search"
 
 
 def fetch_himalayas_jobs(max_pages=5):
     jobs = []
-    cursor = None
 
-    for page in range(max_pages):
+    for page in range(1, max_pages + 1):
         params = {
             "worldwide": "true",
             "sort": "recent",
+            "page": page,
         }
-
-        if cursor:
-            params["cursor"] = cursor
 
         response = requests.get(
             HIMALAYAS_URL,
             params=params,
-            headers={
-                "User-Agent": "AI Job Finder"
-            },
+            headers={"User-Agent": "AI Job Finder"},
             timeout=30,
         )
 
         response.raise_for_status()
 
         data = response.json()
+        
+        print(f"  Page {page}: {len(data['jobs'])} jobs")
 
         for item in data["jobs"]:
             job = Job(
@@ -44,31 +40,18 @@ def fetch_himalayas_jobs(max_pages=5):
                 description=item.get("description", ""),
                 tags=item.get("categories", []),
                 url=item["applicationLink"],
-                posted_at=datetime.fromtimestamp(
-                    item["pubDate"],
-                    tz=timezone.utc
-                ),
+                posted_at=datetime.fromtimestamp(item["pubDate"], tz=timezone.utc),
                 salary_min=item.get("minSalary"),
                 salary_max=item.get("maxSalary"),
-                employment_type=item.get(
-                    "employmentType"
-                ),
-                seniority=item.get(
-                    "seniority", []
-                ),
-                location_restrictions=item.get(
-                    "locationRestrictions", []
-                ),
-                timezone_restrictions=item.get(
-                    "timezoneRestrictions", []
-                ),
+                employment_type=item.get("employmentType"),
+                seniority=item.get("seniority", []),
+                location_restrictions=item.get("locationRestrictions", []),
+                timezone_restrictions=item.get("timezoneRestrictions", []),
             )
 
             jobs.append(job)
 
-        cursor = data.get("nextCursor")
-
-        if not cursor:
-            break
+        if not data["jobs"]:
+         break
 
     return jobs
