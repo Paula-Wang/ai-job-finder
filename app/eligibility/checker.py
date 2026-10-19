@@ -1,6 +1,5 @@
 from app.utils.text import clean_text
 
-
 ELIGIBLE_TERMS = {
     "kenya",
     "africa",
@@ -22,23 +21,23 @@ RESTRICTED_PHRASES = {
 
 
 def check_eligibility(job):
+    if job.source in {
+        "MyJobMag Kenya",
+        "Fuzu Kenya",
+    }:
+        return (
+            "ELIGIBLE",
+            [f"Listed on {job.source}"],
+        )
     description = clean_text(job.description).lower()
 
-    restrictions = [
-        restriction.lower()
-        for restriction in job.location_restrictions
-    ]
+    restrictions = [restriction.lower() for restriction in job.location_restrictions]
 
     # First use structured location data when available.
     if restrictions:
         for restriction in restrictions:
-            if any(
-                term in restriction
-                for term in ELIGIBLE_TERMS
-            ):
-                return "LIKELY_ELIGIBLE", [
-                    f"Location allows: {restriction}"
-                ]
+            if any(term in restriction for term in ELIGIBLE_TERMS):
+                return "LIKELY_ELIGIBLE", [f"Location allows: {restriction}"]
 
         return "LIKELY_RESTRICTED", [
             "Structured location restrictions do not appear to include Kenya"
@@ -52,10 +51,6 @@ def check_eligibility(job):
 
     for term in ELIGIBLE_TERMS:
         if term in description:
-            return "LIKELY_ELIGIBLE", [
-                f"Job description mentions: {term}"
-            ]
+            return "LIKELY_ELIGIBLE", [f"Job description mentions: {term}"]
 
-    return "CHECK_MANUALLY", [
-        "No clear eligibility or location restriction found"
-    ]
+    return "CHECK_MANUALLY", ["No clear eligibility or location restriction found"]
