@@ -2,7 +2,6 @@ import re
 
 from app.utils.text import clean_text
 
-
 ENTRY_LEVEL_TERMS = [
     "entry-level",
     "entry level",
@@ -20,31 +19,22 @@ def extract_experience(job):
     Returns:
         (min_years, max_years, evidence)
     """
-    text = clean_text(
-        job.description
-    ).lower()
+    text = clean_text(job.description).lower()
 
     # Example:
     # "3-5 years"
     # "3 - 5 years"
     # "3 to 5 years"
     range_pattern = re.compile(
-        r"\b(\d{1,2})\s*"
-        r"(?:-|–|—|to)\s*"
-        r"(\d{1,2})\s+"
-        r"years?\b"
+        r"\b(\d{1,2})\s*" r"(?:-|–|—|to)\s*" r"(\d{1,2})\s+" r"years?\b"
     )
 
     match = range_pattern.search(text)
 
     if match:
-        minimum = int(
-            match.group(1)
-        )
+        minimum = int(match.group(1))
 
-        maximum = int(
-            match.group(2)
-        )
+        maximum = int(match.group(2))
 
         return (
             minimum,
@@ -56,16 +46,13 @@ def extract_experience(job):
     # "minimum 5 years"
     # "at least 3 years"
     minimum_pattern = re.compile(
-        r"\b(?:minimum(?: of)?|at least)"
-        r"\s+(\d{1,2})\s+years?\b"
+        r"\b(?:minimum(?: of)?|at least)" r"\s+(\d{1,2})\s+years?\b"
     )
 
     match = minimum_pattern.search(text)
 
     if match:
-        years = int(
-            match.group(1)
-        )
+        years = int(match.group(1))
 
         return (
             years,
@@ -76,17 +63,12 @@ def extract_experience(job):
     # Example:
     # "5 years of experience"
     # "5 years experience"
-    years_pattern = re.compile(
-        r"\b(\d{1,2})\+?\s+years?"
-        r"(?:\s+of)?\s+experience\b"
-    )
+    years_pattern = re.compile(r"\b(\d{1,2})\+?\s+years?" r"(?:\s+of)?\s+experience\b")
 
     match = years_pattern.search(text)
 
     if match:
-        years = int(
-            match.group(1)
-        )
+        years = int(match.group(1))
 
         return (
             years,
@@ -112,9 +94,7 @@ def extract_experience(job):
 
 
 def classify_experience(job):
-    minimum, maximum, evidence = (
-        extract_experience(job)
-    )
+    minimum, maximum, evidence = extract_experience(job)
 
     if minimum is None:
         return (
@@ -123,29 +103,31 @@ def classify_experience(job):
         )
 
     if maximum is not None:
-     if maximum <= 2:
+        if maximum <= 2:
+            return "GOOD_FIT", evidence
+
+    if minimum <= 2:
+        return "STRETCH", evidence
+
+    if minimum == 3:
+        return "STRETCH", evidence
+
+    if minimum <= 5:
+        return "UNLIKELY", evidence
+
+    return "TOO_SENIOR", evidence
+
+    if minimum <= 2:
         return (
             "GOOD_FIT",
             evidence,
         )
 
-    if minimum <= 2 and maximum <= 3:
+    if minimum == 3:
         return (
             "STRETCH",
             evidence,
         )
-
-    if minimum <= 2:
-     return (
-        "GOOD_FIT",
-        evidence,
-    )
-
-    if minimum == 3:
-     return (
-        "STRETCH",
-        evidence,
-    )
 
     if minimum <= 5:
         return (

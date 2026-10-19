@@ -1,4 +1,5 @@
 import json
+import re
 
 import requests
 from bs4 import BeautifulSoup
@@ -7,11 +8,18 @@ from urllib.parse import urljoin
 
 from app.models.job import Job
 
+
 BASE_URL = "https://www.fuzu.com"
 
 FUZU_BASE_URLS = [
-    ("https://www.fuzu.com/kenya/job/" "computers-software-development"),
-    ("https://www.fuzu.com/kenya/job/" "computers-software-development/basic"),
+    (
+        "https://www.fuzu.com/kenya/job/"
+        "computers-software-development"
+    ),
+    (
+        "https://www.fuzu.com/kenya/job/"
+        "computers-software-development/basic"
+    ),
 ]
 
 HEADERS = {
@@ -35,7 +43,9 @@ def fetch_page(url):
         return response.text
 
     except requests.RequestException as error:
-        print(f"  Fuzu unavailable: {error}")
+        print(
+            f"  Fuzu unavailable: {error}"
+        )
 
         return ""
 
@@ -49,15 +59,25 @@ def fetch_job_links(max_pages=3):
     links = set()
 
     for base_url in FUZU_BASE_URLS:
-        for page in range(1, max_pages + 1):
+        for page in range(
+            1,
+            max_pages + 1,
+        ):
             if page == 1:
                 page_url = base_url
             else:
-                page_url = f"{base_url}?page={page}"
+                page_url = (
+                    f"{base_url}?page={page}"
+                )
 
-            print(f"  Scanning Fuzu page " f"{page}: {page_url}")
+            print(
+                f"  Scanning Fuzu page "
+                f"{page}: {page_url}"
+            )
 
-            html = fetch_page(page_url)
+            html = fetch_page(
+                page_url
+            )
 
             if not html:
                 continue
@@ -78,7 +98,9 @@ def fetch_job_links(max_pages=3):
                     "",
                 )
 
-                if not href.startswith("/kenya/jobs/"):
+                if not href.startswith(
+                    "/kenya/jobs/"
+                ):
                     continue
 
                 page_links.add(
@@ -88,16 +110,23 @@ def fetch_job_links(max_pages=3):
                     )
                 )
 
-            print(f"    Found " f"{len(page_links)} " f"job links.")
+            print(
+                f"    Found "
+                f"{len(page_links)} "
+                f"job links."
+            )
 
-            links.update(page_links)
+            links.update(
+                page_links
+            )
 
     return links
 
 
 def extract_job_posting(html):
     """
-    Extract Fuzu's structured JobPosting JSON-LD.
+    Extract Fuzu's structured JobPosting
+    JSON-LD data.
     """
     soup = BeautifulSoup(
         html,
@@ -114,11 +143,17 @@ def extract_job_posting(html):
             continue
 
         try:
-            data = json.loads(script.string)
+            data = json.loads(
+                script.string
+            )
         except json.JSONDecodeError:
             continue
 
-        if isinstance(data, dict) and data.get("@type") == "JobPosting":
+        if (
+            isinstance(data, dict)
+            and data.get("@type")
+            == "JobPosting"
+        ):
             return data
 
     return None
@@ -126,7 +161,7 @@ def extract_job_posting(html):
 
 def clean_description(description):
     """
-    Convert the HTML description from JSON-LD
+    Convert an HTML job description
     into plain text.
     """
     if not description:
@@ -144,183 +179,457 @@ def clean_description(description):
 
 
 def extract_location(data):
-    location = data.get("jobLocation")
+    """
+    Extract location from JSON-LD
+    JobPosting data.
+    """
+    location = data.get(
+        "jobLocation"
+    )
 
     if not location:
         return "Kenya"
 
-    if isinstance(location, list):
+    if isinstance(
+        location,
+        list,
+    ):
         location = location[0]
 
-    if not isinstance(location, dict):
+    if not isinstance(
+        location,
+        dict,
+    ):
         return "Kenya"
 
-    address = location.get("address", {})
+    address = location.get(
+        "address",
+        {},
+    )
 
-    if not isinstance(address, dict):
+    if not isinstance(
+        address,
+        dict,
+    ):
         return "Kenya"
 
-    city = address.get("addressLocality")
+    city = address.get(
+        "addressLocality"
+    )
 
-    country = address.get("addressCountry")
+    country = address.get(
+        "addressCountry"
+    )
 
-    parts = [part for part in [city, country] if part]
+    parts = [
+        part
+        for part in [
+            city,
+            country,
+        ]
+        if part
+    ]
 
-    return ", ".join(parts) or "Kenya"
+    return (
+        ", ".join(parts)
+        or "Kenya"
+    )
 
 
-def fetch_fuzu_jobs():
-    print("  Finding Fuzu jobs...")
-
-    links = fetch_job_links()
-
-    print(f"  Found {len(links)} " f"unique Fuzu job links.")
-
-    jobs = []
-
-    for url in links:
-        html = fetch_page(url)
-
-        if not html:
-            continue
-
-        data = extract_job_posting(html)
-
-        if not data:
-            print(f"    No JobPosting data: {url}")
-            continue
-
-        title = data.get(
-            "title",
-            "",
-        ).strip()
-
-        organization = data.get(
-            "hiringOrganization",
-            {},
-        )
-
-        if isinstance(
-            organization,
-            dict,
-        ):
-            company = organization.get(
-                "name",
-                "",
-            ).strip()
-        else:
-            company = ""
-
-        print(f"    Reading: " f"{title} at {company}")
-
-        description = clean_description(
-            data.get(
-                "description",
-                "",
-            )
-        )
-
-        date_posted = data.get("datePosted")
-
-        try:
-            posted_at = datetime.fromisoformat(date_posted).replace(tzinfo=timezone.utc)
-        except (
-            TypeError,
-            ValueError,
-        ):
-            posted_at = datetime.now(timezone.utc)
-
-        identifier = data.get(
-            "identifier",
-            {},
-        )
-
-        if isinstance(
-            identifier,
-            dict,
-        ):
-            source_id = str(
-                identifier.get(
-                    "value",
-                    url,
-                )
-            )
-        else:
-            source_id = url
-
-        job = Job(
-            source_id=source_id,
-            source="Fuzu Kenya",
-            title=title,
-            company=company,
-            location=extract_location(data),
-            description=description,
-            tags=[],
-            url=url,
-            posted_at=posted_at,
-        )
-
-        jobs.append(job)
-
-    print(f"  Collected {len(jobs)} " f"Fuzu jobs.")
-
-    return jobs
-
-def inspect_fallback_page(url):
-    html = fetch_page(url)
-
-    if not html:
-        return
-
+def extract_fallback_job(
+    html,
+    url,
+):
+    """
+    Extract job information from visible
+    Fuzu HTML when JobPosting JSON-LD
+    is unavailable.
+    """
     soup = BeautifulSoup(
         html,
         "html.parser",
     )
 
-    print("\n" + "=" * 60)
-    print("FUZU FALLBACK PAGE")
-    print("=" * 60)
+    # -------------------------
+    # Title
+    # -------------------------
+    heading = soup.find("h1")
+
+    if not heading:
+        return None
+
+    title = heading.get_text(
+        " ",
+        strip=True,
+    )
+
+    # -------------------------
+    # Company
+    # -------------------------
+    company = ""
 
     if soup.title:
-        print("\nPAGE TITLE:")
-        print(
+        page_title = (
             soup.title.get_text(
                 " ",
                 strip=True,
             )
         )
 
-    print("\nHEADINGS:")
-
-    for heading in soup.find_all(
-        ["h1", "h2", "h3"]
-    ):
-        text = heading.get_text(
-            " ",
-            strip=True,
+        match = re.match(
+            (
+                r"^.+?\s+at\s+"
+                r"(.+?)\s+\|\s+Fuzu$"
+            ),
+            page_title,
         )
 
-        if text:
-            print(
-                heading.name,
-                repr(text),
+        if match:
+            company = (
+                match.group(1)
+                .strip()
             )
 
-    print("\nPARAGRAPHS:")
-
-    paragraphs = []
-
-    for paragraph in soup.find_all("p"):
-        text = paragraph.get_text(
+    # -------------------------
+    # Visible paragraph text
+    # -------------------------
+    paragraphs = [
+        paragraph.get_text(
             " ",
             strip=True,
         )
+        for paragraph
+        in soup.find_all("p")
+        if paragraph.get_text(
+            " ",
+            strip=True,
+        )
+    ]
 
-        if text:
-            paragraphs.append(text)
+    # -------------------------
+    # Posted date
+    # -------------------------
+    posted_at = None
 
-    for text in paragraphs[:40]:
-        print(repr(text))
+    for text in paragraphs:
+        if text.startswith(
+            "Posted:"
+        ):
+            date_text = (
+                text.replace(
+                    "Posted:",
+                    "",
+                    1,
+                )
+                .strip()
+            )
+
+            try:
+                posted_at = (
+                    datetime.strptime(
+                        date_text,
+                        "%d %b %Y",
+                    )
+                    .replace(
+                        tzinfo=timezone.utc
+                    )
+                )
+            except ValueError:
+                pass
+
+            break
+
+    # -------------------------
+    # Location
+    # -------------------------
+    location = "Kenya"
+
+    for index, text in enumerate(
+        paragraphs
+    ):
+        if (
+            text == "Location"
+            and index + 1
+            < len(paragraphs)
+        ):
+            location = (
+                paragraphs[
+                    index + 1
+                ]
+                .replace(
+                    "•",
+                    ",",
+                )
+            )
+
+            location = re.sub(
+                r"\s*,\s*",
+                ", ",
+                location,
+            )
+
+            break
+
+    # -------------------------
+    # Description
+    # -------------------------
+    description = ""
+
+    skip_prefixes = (
+        "More than ",
+        "Posted:",
+        "Apply by:",
+        "Recruit better ",
+        "Selected articles ",
+        "Don’t miss your chance",
+        "Fuzu helps you ",
+        "© ",
+    )
+
+    skip_exact = {
+        "Expired",
+        "Location",
+        "Contract Type",
+        "Home",
+        "Jobs",
+        "Articles",
+        "Learn",
+    }
+
+    for text in paragraphs:
+        if text in skip_exact:
+            continue
+
+        if text.startswith(
+            skip_prefixes
+        ):
+            continue
+
+        if len(text) >= 100:
+            description = text
+            break
+
+    return {
+        "title": title,
+        "company": company,
+        "location": location,
+        "description": description,
+        "posted_at": posted_at,
+        "url": url,
+    }
+
+
+def fetch_fuzu_jobs():
+    """
+    Fetch Fuzu jobs using JSON-LD when
+    available and visible HTML as a fallback.
+    """
+    print(
+        "  Finding Fuzu jobs..."
+    )
+
+    links = fetch_job_links()
+
+    print(
+        f"  Found {len(links)} "
+        f"unique Fuzu job links."
+    )
+
+    jobs = []
+
+    for url in links:
+        html = fetch_page(
+            url
+        )
+
+        if not html:
+            continue
+
+        data = extract_job_posting(
+            html
+        )
+
+        # =========================
+        # JSON-LD extraction
+        # =========================
+        if data:
+            title = data.get(
+                "title",
+                "",
+            ).strip()
+
+            organization = data.get(
+                "hiringOrganization",
+                {},
+            )
+
+            if isinstance(
+                organization,
+                dict,
+            ):
+                company = (
+                    organization.get(
+                        "name",
+                        "",
+                    )
+                    .strip()
+                )
+            else:
+                company = ""
+
+            description = (
+                clean_description(
+                    data.get(
+                        "description",
+                        "",
+                    )
+                )
+            )
+
+            location = (
+                extract_location(
+                    data
+                )
+            )
+
+            date_posted = data.get(
+                "datePosted"
+            )
+
+            try:
+                posted_at = (
+                    datetime.fromisoformat(
+                        date_posted
+                    )
+                    .replace(
+                        tzinfo=timezone.utc
+                    )
+                )
+            except (
+                TypeError,
+                ValueError,
+            ):
+                posted_at = None
+
+            identifier = data.get(
+                "identifier",
+                {},
+            )
+
+            if isinstance(
+                identifier,
+                dict,
+            ):
+                source_id = str(
+                    identifier.get(
+                        "value",
+                        url,
+                    )
+                )
+            else:
+                source_id = url
+
+            extraction_method = (
+                "JSON-LD"
+            )
+
+        # =========================
+        # HTML fallback
+        # =========================
+        else:
+            fallback = (
+                extract_fallback_job(
+                    html,
+                    url,
+                )
+            )
+
+            if not fallback:
+                print(
+                    f"    Could not "
+                    f"parse: {url}"
+                )
+                continue
+
+            title = fallback[
+                "title"
+            ]
+
+            company = fallback[
+                "company"
+            ]
+
+            location = fallback[
+                "location"
+            ]
+
+            description = fallback[
+                "description"
+            ]
+
+            posted_at = fallback[
+                "posted_at"
+            ]
+
+            source_id = url
+
+            extraction_method = (
+                "HTML fallback"
+            )
+
+        # =========================
+        # Validation
+        # =========================
+        if not title:
+            print(
+                f"    Missing title: "
+                f"{url}"
+            )
+            continue
+
+        if not posted_at:
+            print(
+                f"    Missing posted "
+                f"date: {title}"
+            )
+
+            # Temporary fallback because
+            # Job currently requires a
+            # datetime value.
+            posted_at = datetime.now(
+                timezone.utc
+            )
+
+        print(
+            f"    Reading: "
+            f"{title} at "
+            f"{company} "
+            f"[{extraction_method}]"
+        )
+
+        job = Job(
+            source_id=source_id,
+            source="Fuzu Kenya",
+            title=title,
+            company=company,
+            location=location,
+            description=description,
+            tags=[],
+            url=url,
+            posted_at=posted_at,
+        )
+
+        jobs.append(
+            job
+        )
+
+    print(
+        f"  Collected "
+        f"{len(jobs)} "
+        f"Fuzu jobs."
+    )
+
+    return jobs
 
 
 if __name__ == "__main__":
@@ -329,9 +638,31 @@ if __name__ == "__main__":
     print()
 
     for job in jobs:
-        print("=" * 60)
-        print(f"Title:    {job.title}")
-        print(f"Company:  {job.company}")
-        print(f"Location: {job.location}")
-        print(f"Posted:   {job.posted_at.date()}")
-        print(f"URL:      {job.url}")
+        print(
+            "=" * 60
+        )
+
+        print(
+            f"Title:    "
+            f"{job.title}"
+        )
+
+        print(
+            f"Company:  "
+            f"{job.company}"
+        )
+
+        print(
+            f"Location: "
+            f"{job.location}"
+        )
+
+        print(
+            f"Posted:   "
+            f"{job.posted_at.date()}"
+        )
+
+        print(
+            f"URL:      "
+            f"{job.url}"
+        )

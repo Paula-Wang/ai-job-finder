@@ -2,7 +2,6 @@ from difflib import SequenceMatcher
 
 from app.profile import CAREER_TRACKS
 
-
 SENIORITY_PENALTIES = {
     "senior": -10,
     "staff": -12,
@@ -27,9 +26,11 @@ EARLY_CAREER_BONUSES = {
 CAREER_STAGE_PENALTIES = {
     "intern": -15,
     "internship": -15,
+    "trainee": -15,
     "attachment": -20,
     "industrial attachment": -20,
     "student": -20,
+    "learner": -15,
 }
 
 
@@ -54,14 +55,8 @@ def fuzzy_title_match(
 
     window_size = len(term_words)
 
-    for index in range(
-        len(title_words) - window_size + 1
-    ):
-        candidate = " ".join(
-            title_words[
-                index:index + window_size
-            ]
-        )
+    for index in range(len(title_words) - window_size + 1):
+        candidate = " ".join(title_words[index : index + window_size])
 
         similarity = SequenceMatcher(
             None,
@@ -79,10 +74,7 @@ def calculate_relevance(job):
     title = job.title.lower()
     description = job.description.lower()
 
-    tags = [
-        tag.lower()
-        for tag in job.tags
-    ]
+    tags = [tag.lower() for tag in job.tags]
 
     track_scores = {}
 
@@ -98,25 +90,19 @@ def calculate_relevance(job):
             term = term.lower()
 
             if term in title:
-                exact_title_matches.append(
-                    term
-                )
+                exact_title_matches.append(term)
 
             elif fuzzy_title_match(
                 term,
                 title,
             ):
-                fuzzy_title_matches.append(
-                    term
-                )
+                fuzzy_title_matches.append(term)
 
             if term in tags:
                 score += 3
 
             if term in description:
-                description_matches.append(
-                    term
-                )
+                description_matches.append(term)
 
         # Prefer one exact title match.
         # If there is no exact match, allow one
@@ -129,9 +115,7 @@ def calculate_relevance(job):
 
             score += 10
 
-            matched_terms.append(
-                best_exact
-            )
+            matched_terms.append(best_exact)
 
         elif fuzzy_title_matches:
             best_fuzzy = max(
@@ -141,9 +125,7 @@ def calculate_relevance(job):
 
             score += 8
 
-            matched_terms.append(
-                f"{best_fuzzy} (fuzzy)"
-            )
+            matched_terms.append(f"{best_fuzzy} (fuzzy)")
 
         # Description matches provide supporting
         # evidence but should not dominate scoring.
@@ -166,72 +148,41 @@ def calculate_relevance(job):
 
     best_track = max(
         track_scores,
-        key=lambda track: (
-            track_scores[track]["score"]
-        ),
+        key=lambda track: (track_scores[track]["score"]),
     )
 
-    score = track_scores[
-        best_track
-    ]["score"]
+    score = track_scores[best_track]["score"]
 
-    reasons = [
-        f"Career track: {best_track}"
-    ]
+    reasons = [f"Career track: {best_track}"]
 
-    for term in track_scores[
-        best_track
-    ]["matched_terms"]:
-        reasons.append(
-            f"Matched '{term}'"
-        )
+    for term in track_scores[best_track]["matched_terms"]:
+        reasons.append(f"Matched '{term}'")
 
-    seniority = [
-        level.lower()
-        for level in job.seniority
-    ]
+    seniority = [level.lower() for level in job.seniority]
 
     # Penalize jobs that are clearly senior.
-    for word, penalty in (
-        SENIORITY_PENALTIES.items()
-    ):
-        if (
-            word in title
-            or any(
-                word in level
-                for level in seniority
-            )
-        ):
+    for word, penalty in SENIORITY_PENALTIES.items():
+        if word in title or any(word in level for level in seniority):
             score += penalty
 
-            reasons.append(
-                f"Seniority penalty: '{word}'"
-            )
+            reasons.append(f"Seniority penalty: '{word}'")
 
     # Give a bonus to suitable early-career
     # titles such as Junior or Graduate.
-    for word, bonus in (
-        EARLY_CAREER_BONUSES.items()
-    ):
+    for word, bonus in EARLY_CAREER_BONUSES.items():
         if word in title:
             score += bonus
 
-            reasons.append(
-                f"Early-career bonus: '{word}'"
-            )
+            reasons.append(f"Early-career bonus: '{word}'")
 
     # Penalize internships and similar roles
     # because we are looking for a next career
     # move rather than restarting at internship.
-    for word, penalty in (
-        CAREER_STAGE_PENALTIES.items()
-    ):
+    for word, penalty in CAREER_STAGE_PENALTIES.items():
         if word in title:
             score += penalty
 
-            reasons.append(
-                f"Career-stage penalty: '{word}'"
-            )
+            reasons.append(f"Career-stage penalty: '{word}'")
 
     return (
         max(score, 0),
